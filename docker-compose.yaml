@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # 1. Módulo 1 - Identidad y Acceso (Keycloak local para pruebas)
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.0
+    container_name: m1_keycloak
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_PASSWORD:?Falta definir KC_PASSWORD en el archivo .env}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./realm-config:/opt/keycloak/data/import
+    command: 
+      - start-dev
+      - --import-realm
+
+  # 2. Aplicación Backend (FastAPI) - COMENTADA HASTA QUE HAYA CÓDIGO
+  # api:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: m7_fastapi
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - DATABASE_URL=${SUPABASE_URL} # Ahora lee directamente la URL de Supabase
+  #     - KEYCLOAK_ISSUER_URI=http://keycloak:8080/realms/ds-2026-realm
+  #     - M4_UBICACION_URL=${M4_UBICACION_URL}
+  #     - M6_VIAJES_URL=${M6_VIAJES_URL}
+  #     - M9_RESERVAS_URL=${M9_RESERVAS_URL}
+  #   depends_on:
+  #     - keycloak
