@@ -54,7 +54,52 @@ docker compose up -d
 > **Nota:** Keycloak se inicializará automáticamente con el Realm del proyecto y todos los Client Scopes (`tarifas:read`, `pagos:write`, etc.) gracias al volumen de autoconfiguración.
 
 ### 3. Ejecutar la API
-*(Instrucciones pendientes hasta la definición del gestor de paquetes de Python: pip/poetry).*
+Con Docker, el paso anterior ya levanta la API en `http://localhost:8000`. Para correrla localmente:
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+La documentación interactiva queda en `http://localhost:8000/docs`. Con `AUTH_DISABLED=true` en el `.env` se puede probar sin token.
+
+### 4. Probar con un token real
+El realm incluye el client confidencial `m7-tarifas` (service account con los 6 scopes del módulo). Su secret está en `realm-config/ds-2026-realm.json` (`clients` → `m7-tarifas` → `secret`) y solo sirve para el Keycloak local.
+```bash
+curl -s -d grant_type=client_credentials -d client_id=m7-tarifas -d client_secret=<secret> \
+  http://localhost:8080/realms/ds-2026-realm/protocol/openid-connect/token
+# Usar el access_token devuelto:
+curl -H "Authorization: Bearer <access_token>" http://localhost:8000/api/v1/tarifas/reglas
+```
+
+> **Nota:** por ahora los datos se guardan en memoria (`app/services/store.py`) y se pierden al reiniciar, hasta conectar Supabase.
+
+---
+
+## 🔌 Endpoints (`/api/v1`)
+
+| Método | Ruta | Scope | Descripción |
+|---|---|---|---|
+| POST | `/tarifas/estimaciones` | `tarifas:read` | Precio estimado de un viaje |
+| POST | `/tarifas/viajes/{viaje_id}/tarifa-final` | `tarifas:write` | Calcula y registra el precio final al terminar el viaje |
+| GET | `/tarifas/viajes/{viaje_id}/tarifa-final` | `tarifas:read` | Consulta la tarifa final |
+| GET | `/tarifas/reglas` | `tarifas:read` | Lista reglas de tarifa |
+| GET | `/tarifas/reglas/{regla_id}` | `tarifas:read` | Detalle de una regla |
+| POST | `/tarifas/reglas` | `tarifas:write` | Crea una regla (reemplaza la activa del mismo vehículo) |
+| PATCH | `/tarifas/reglas/{regla_id}` | `tarifas:write` | Modifica una regla |
+| POST | `/pagos` | `pagos:write` | Registra un pago (acepta `Idempotency-Key`) |
+| GET | `/pagos` | `pagos:read` | Lista pagos (filtros: viaje, cliente, beneficiario, estado) |
+| GET | `/pagos/{pago_id}` | `pagos:read` | Detalle de un pago |
+| POST | `/pagos/{pago_id}/reembolsos` | `pagos:write` | Reembolso total o parcial |
+| GET | `/pagos/{pago_id}/reembolsos` | `pagos:read` | Reembolsos de un pago |
+| POST | `/pagos/webhooks/pasarela` | header `X-Webhook-Secret` | Confirmación de la pasarela externa |
+| POST | `/liquidaciones` | `liquidaciones:write` | Genera la liquidación de un beneficiario para un período |
+| GET | `/liquidaciones` | `liquidaciones:read` | Lista liquidaciones |
+| GET | `/liquidaciones/{liquidacion_id}` | `liquidaciones:read` | Detalle de una liquidación |
+| GET | `/liquidaciones/saldos/{beneficiario_id}` | `liquidaciones:read` | Saldo de un chofer/dueño |
+| POST | `/liquidaciones/{liquidacion_id}/transferencia` | `liquidaciones:write` | Confirma la transferencia |
+| POST | `/liquidaciones/{liquidacion_id}/anulacion` | `liquidaciones:write` | Anula y libera los pagos |
 
 ---
 
