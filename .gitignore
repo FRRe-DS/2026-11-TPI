@@ -1,0 +1,11 @@
+cat > .gitignore <<'EOF'
+.env
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+EOF.env
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
