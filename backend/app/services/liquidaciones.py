@@ -1,9 +1,15 @@
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime, time, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID, uuid4
 
-from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.errors import conflicto, no_encontrado, no_procesable
+from app.core.security import Usuario
+from app.db import models
 from app.schemas.liquidaciones import (
     EstadoLiquidacion,
     Liquidacion,
@@ -11,118 +17,195 @@ from app.schemas.liquidaciones import (
     Saldo,
     TransferenciaConfirmacion,
 )
-from app.schemas.pagos import Pago
-from app.services import store
+from app.schemas.movimientos import TipoMovimiento
+from app.services import movimientos
 from app.services.pagos import ESTADOS_COBRADOS
 
-# TODO: definir con la cátedra/negocio el porcentaje real de comisión
-COMISION_PLATAFORMA = Decimal("0.20")
 CENTAVOS = Decimal("0.01")
+CERO = Decimal("0")
+
+_COBRADOS = [e.value for e in ESTADOS_COBRADOS]
+
+TRANSICIONES = {
+    EstadoLiquidacion.pendiente: {EstadoLiquidacion.transferida, EstadoLiquidacion.anulada},
+    EstadoLiquidacion.transferida: set(),
+    EstadoLiquidacion.anulada: set(),
+}
 
 
-def _pagos_ya_liquidados() -> set[UUID]:
-    return {
-        pago_id
-        for liq in store.liquidaciones.values()
-        if liq.estado != EstadoLiquidacion.anulada
-        for pago_id in liq.pago_ids
-    }
+@dataclass(frozen=True)
+class Montos:
+    bruto: Decimal
+    comision: Decimal
+    neto: Decimal
 
 
-def _pagos_liquidables(beneficiario_id: UUID) -> list[Pago]:
-    liquidados = _pagos_ya_liquidados()
-    return [
-        p
-        for p in store.pagos.values()
-        if p.beneficiario_id == beneficiario_id and p.estado in ESTADOS_COBRADOS and p.id not in liquidados
-    ]
+# --- Reglas puras -----------------------------------------------------------
 
 
-def _neto_pago(pago: Pago) -> Decimal:
-    return pago.monto - pago.monto_reembolsado
+def neto_pago(monto_capturado: Decimal, monto_reembolsado: Decimal) -> Decimal:
+    return monto_capturado - monto_reembolsado
 
 
-def generar_liquidacion(datos: LiquidacionCreate) -> Liquidacion:
-    pagos = [
-        p
-        for p in _pagos_liquidables(datos.beneficiario_id)
-        if datos.periodo_desde <= p.creado_en.date() <= datos.periodo_hasta
-    ]
-    if not pagos:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY, "No hay pagos pendientes de liquidar en el período indicado"
+def calcular_montos(netos: list[Decimal], porcentaje_comision: Decimal) -> Montos:
+    bruto = sum(netos, CERO)
+    comision = (bruto * porcentaje_comision).quantize(CENTAVOS, rounding=ROUND_HALF_UP)
+    return Montos(bruto=bruto, comision=comision, neto=bruto - comision)
+
+
+def calcular_saldo(
+    beneficiario_id: UUID, netos_sin_liquidar: list[Decimal], liquidaciones: list[tuple[EstadoLiquidacion, Decimal]]
+) -> Saldo:
+    def total(estado: EstadoLiquidacion) -> Decimal:
+        return sum((neto for e, neto in liquidaciones if e == estado), CERO)
+
+    return Saldo(
+        beneficiario_id=beneficiario_id,
+        saldo_pendiente_liquidar=sum(netos_sin_liquidar, CERO),
+        liquidado_pendiente_transferir=total(EstadoLiquidacion.pendiente),
+        total_transferido=total(EstadoLiquidacion.transferida),
+    )
+
+
+def validar_transicion(actual: EstadoLiquidacion, nuevo: EstadoLiquidacion) -> None:
+    if nuevo not in TRANSICIONES[actual]:
+        raise conflicto(
+            "transicion-invalida",
+            "El estado de la liquidación no admite la operación",
+            f"La liquidación ya está en estado '{actual.value}'",
         )
-    bruto = sum((_neto_pago(p) for p in pagos), Decimal("0"))
-    comision = (bruto * COMISION_PLATAFORMA).quantize(CENTAVOS, rounding=ROUND_HALF_UP)
+
+
+# --- Acceso a datos ---------------------------------------------------------
+
+
+def _consulta_liquidables(beneficiario_id: UUID):
+    """Pagos cobrados del beneficiario que todavía no están en una liquidación vigente."""
+    return select(models.Pago).where(
+        models.Pago.beneficiario_id == beneficiario_id,
+        models.Pago.estado.in_(_COBRADOS),
+        models.Pago.liquidacion_id.is_(None),
+    )
+
+
+def generar_liquidacion(db: Session, datos: LiquidacionCreate, usuario: Usuario) -> Liquidacion:
+    desde = datetime.combine(datos.periodo_desde, time.min, tzinfo=timezone.utc)
+    hasta = datetime.combine(datos.periodo_hasta + timedelta(days=1), time.min, tzinfo=timezone.utc)
+    # FOR UPDATE: dos liquidaciones simultáneas no pueden tomar el mismo pago
+    pagos = db.scalars(
+        _consulta_liquidables(datos.beneficiario_id)
+        .where(models.Pago.capturado_en >= desde, models.Pago.capturado_en < hasta)
+        .order_by(models.Pago.creado_en)
+        .with_for_update()
+    ).all()
+    netos = [neto_pago(p.monto_capturado, p.monto_reembolsado) for p in pagos]
+    if not pagos or sum(netos, CERO) <= 0:
+        raise no_procesable("sin-pagos-para-liquidar", "No hay pagos pendientes de liquidar en el período indicado")
+    porcentaje = settings.comision_plataforma
+    montos = calcular_montos(netos, porcentaje)
     ahora = datetime.now(timezone.utc)
-    liquidacion = Liquidacion(
+    liquidacion = models.Liquidacion(
         id=uuid4(),
         beneficiario_id=datos.beneficiario_id,
         periodo_desde=datos.periodo_desde,
         periodo_hasta=datos.periodo_hasta,
-        pago_ids=[p.id for p in pagos],
-        monto_bruto=bruto,
-        comision_plataforma=comision,
-        monto_neto=bruto - comision,
-        estado=EstadoLiquidacion.pendiente,
+        monto_bruto=montos.bruto,
+        comision_porcentaje=porcentaje,
+        comision_plataforma=montos.comision,
+        monto_neto=montos.neto,
+        moneda="ARS",
+        estado=EstadoLiquidacion.pendiente.value,
         creada_en=ahora,
         actualizada_en=ahora,
+        pagos=list(pagos),
     )
-    store.liquidaciones[liquidacion.id] = liquidacion
-    return liquidacion
+    db.add(liquidacion)
+    db.flush()
+    for pago in pagos:
+        pago.liquidacion_id = liquidacion.id
+    movimientos.registrar(
+        db,
+        TipoMovimiento.liquidacion_generada,
+        usuario.sub,
+        montos.neto,
+        liquidacion=liquidacion,
+        detalle=f"Bruto {montos.bruto}, comisión {montos.comision} ({porcentaje})",
+    )
+    db.commit()
+    return Liquidacion.model_validate(liquidacion)
 
 
-def obtener_liquidacion(liquidacion_id: UUID) -> Liquidacion:
-    liquidacion = store.liquidaciones.get(liquidacion_id)
+def buscar(db: Session, liquidacion_id: UUID, bloquear: bool = False) -> models.Liquidacion:
+    consulta = select(models.Liquidacion).where(models.Liquidacion.id == liquidacion_id)
+    if bloquear:
+        consulta = consulta.with_for_update().execution_options(populate_existing=True)
+    liquidacion = db.scalar(consulta)
     if liquidacion is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Liquidación no encontrada")
+        raise no_encontrado("Liquidación no encontrada")
     return liquidacion
 
 
-def listar_liquidaciones(beneficiario_id: UUID | None, estado: EstadoLiquidacion | None) -> list[Liquidacion]:
-    return [
-        liq
-        for liq in store.liquidaciones.values()
-        if (beneficiario_id is None or liq.beneficiario_id == beneficiario_id)
-        and (estado is None or liq.estado == estado)
-    ]
+def obtener_liquidacion(db: Session, liquidacion_id: UUID) -> Liquidacion:
+    return Liquidacion.model_validate(buscar(db, liquidacion_id))
 
 
-def _cambiar_estado(liquidacion_id: UUID, nuevo: EstadoLiquidacion, **extra) -> Liquidacion:
-    liquidacion = obtener_liquidacion(liquidacion_id)
-    if liquidacion.estado != EstadoLiquidacion.pendiente:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, f"La liquidación ya está en estado '{liquidacion.estado.value}'"
-        )
-    liquidacion = liquidacion.model_copy(
-        update={"estado": nuevo, "actualizada_en": datetime.now(timezone.utc), **extra}
-    )
-    store.liquidaciones[liquidacion.id] = liquidacion
+def listar_liquidaciones(
+    db: Session, beneficiario_id: UUID | None, estado: EstadoLiquidacion | None
+) -> list[Liquidacion]:
+    consulta = select(models.Liquidacion).order_by(models.Liquidacion.creada_en)
+    if beneficiario_id is not None:
+        consulta = consulta.where(models.Liquidacion.beneficiario_id == beneficiario_id)
+    if estado is not None:
+        consulta = consulta.where(models.Liquidacion.estado == estado.value)
+    return [Liquidacion.model_validate(liq) for liq in db.scalars(consulta)]
+
+
+def _cambiar_estado(db: Session, liquidacion_id: UUID, nuevo: EstadoLiquidacion) -> models.Liquidacion:
+    liquidacion = buscar(db, liquidacion_id, bloquear=True)
+    validar_transicion(EstadoLiquidacion(liquidacion.estado), nuevo)
+    liquidacion.estado = nuevo.value
+    liquidacion.actualizada_en = datetime.now(timezone.utc)
     return liquidacion
 
 
-def confirmar_transferencia(liquidacion_id: UUID, datos: TransferenciaConfirmacion) -> Liquidacion:
-    return _cambiar_estado(
-        liquidacion_id, EstadoLiquidacion.transferida, referencia_transferencia=datos.referencia_transferencia
+def confirmar_transferencia(
+    db: Session, liquidacion_id: UUID, datos: TransferenciaConfirmacion, usuario: Usuario
+) -> Liquidacion:
+    liquidacion = _cambiar_estado(db, liquidacion_id, EstadoLiquidacion.transferida)
+    liquidacion.referencia_transferencia = datos.referencia_transferencia
+    movimientos.registrar(
+        db,
+        TipoMovimiento.liquidacion_transferida,
+        usuario.sub,
+        liquidacion.monto_neto,
+        liquidacion=liquidacion,
+        referencia=datos.referencia_transferencia,
     )
+    db.commit()
+    return Liquidacion.model_validate(liquidacion)
 
 
-def anular(liquidacion_id: UUID) -> Liquidacion:
+def anular(db: Session, liquidacion_id: UUID, usuario: Usuario) -> Liquidacion:
     """Anula la liquidación y libera sus pagos para una nueva liquidación."""
-    return _cambiar_estado(liquidacion_id, EstadoLiquidacion.anulada)
+    liquidacion = _cambiar_estado(db, liquidacion_id, EstadoLiquidacion.anulada)
+    for pago in liquidacion.pagos:
+        pago.liquidacion_id = None
+    movimientos.registrar(
+        db, TipoMovimiento.liquidacion_anulada, usuario.sub, liquidacion.monto_neto, liquidacion=liquidacion
+    )
+    db.commit()
+    return Liquidacion.model_validate(liquidacion)
 
 
-def obtener_saldo(beneficiario_id: UUID) -> Saldo:
-    liquidaciones = listar_liquidaciones(beneficiario_id, None)
-    return Saldo(
-        beneficiario_id=beneficiario_id,
-        saldo_pendiente_liquidar=sum(
-            (_neto_pago(p) for p in _pagos_liquidables(beneficiario_id)), Decimal("0")
-        ),
-        liquidado_pendiente_transferir=sum(
-            (liq.monto_neto for liq in liquidaciones if liq.estado == EstadoLiquidacion.pendiente), Decimal("0")
-        ),
-        total_transferido=sum(
-            (liq.monto_neto for liq in liquidaciones if liq.estado == EstadoLiquidacion.transferida), Decimal("0")
-        ),
+def obtener_saldo(db: Session, beneficiario_id: UUID) -> Saldo:
+    pagos = db.scalars(_consulta_liquidables(beneficiario_id)).all()
+    liquidaciones = db.execute(
+        select(models.Liquidacion.estado, models.Liquidacion.monto_neto).where(
+            models.Liquidacion.beneficiario_id == beneficiario_id
+        )
+    ).all()
+    return calcular_saldo(
+        beneficiario_id,
+        [neto_pago(p.monto_capturado, p.monto_reembolsado) for p in pagos],
+        [(EstadoLiquidacion(estado), neto) for estado, neto in liquidaciones],
     )

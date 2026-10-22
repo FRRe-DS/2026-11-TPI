@@ -84,6 +84,42 @@
         "clientRole": false,
         "containerId": "1b05d6cf-a0ab-4dfd-b654-840780073724",
         "attributes": {}
+      },
+      {
+        "id": "50b2af82-bd5b-4bf2-99a3-5aac8aa8ccf5",
+        "name": "cliente",
+        "description": "Cliente de la plataforma: opera sobre sus pagos y medios de pago",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "1b05d6cf-a0ab-4dfd-b654-840780073724",
+        "attributes": {}
+      },
+      {
+        "id": "15df9f1a-741c-4da9-8f0c-916b2027c271",
+        "name": "conductor",
+        "description": "Conductor: consulta sus liquidaciones y saldos",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "1b05d6cf-a0ab-4dfd-b654-840780073724",
+        "attributes": {}
+      },
+      {
+        "id": "929a54b9-c2c6-4d5e-8114-fc6b2d42a1cf",
+        "name": "operador",
+        "description": "Operador o administrador: reglas de tarifa, transferencias y consultas",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "1b05d6cf-a0ab-4dfd-b654-840780073724",
+        "attributes": {}
+      },
+      {
+        "id": "ca2bfaab-9f51-4eed-8faa-85819f335f93",
+        "name": "servicio",
+        "description": "Cuenta de servicio de otro módulo (M5, M6, M9)",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "1b05d6cf-a0ab-4dfd-b654-840780073724",
+        "attributes": {}
       }
     ],
     "client": {
@@ -614,7 +650,7 @@
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "LCeFGPhwnsocRwPlBN1MtIEGhrKoOvNu",
+      "secret": "${M7_CLIENT_SECRET}",
       "redirectUris": [],
       "webOrigins": [],
       "notBefore": 0,
@@ -780,6 +816,37 @@
       ],
       "defaultClientScopes": [],
       "optionalClientScopes": []
+    },
+    {
+      "id": "591082cb-a1df-4245-9531-c51ba8438f98",
+      "clientId": "m7-pruebas",
+      "description": "Client público para pedir tokens de usuarios de prueba (solo Keycloak local)",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "fullScopeAllowed": true,
+      "redirectUris": [],
+      "webOrigins": [],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email",
+        "tarifas:read",
+        "tarifas:write",
+        "pagos:read",
+        "pagos:write",
+        "liquidaciones:read",
+        "liquidaciones:write"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ]
     }
   ],
   "clientScopes": [
@@ -1136,7 +1203,22 @@
         "display.on.consent.screen": "true",
         "gui.order": "",
         "consent.screen.text": ""
-      }
+      },
+      "protocolMappers": [
+        {
+          "id": "7923db4d-999d-46da-ba31-03b612f0fa26",
+          "name": "audiencia m7-tarifas",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "m7-tarifas",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     },
     {
       "id": "f2dfe231-f452-45b7-9e89-14dce6d87884",
@@ -1148,7 +1230,22 @@
         "display.on.consent.screen": "true",
         "gui.order": "",
         "consent.screen.text": ""
-      }
+      },
+      "protocolMappers": [
+        {
+          "id": "98ac390c-b051-4ba9-9407-5d314f776aef",
+          "name": "audiencia m7-tarifas",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "m7-tarifas",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     },
     {
       "id": "5ef6e79f-0987-4ef4-944f-a9924c7e27cd",
@@ -1160,7 +1257,22 @@
         "display.on.consent.screen": "true",
         "gui.order": "",
         "consent.screen.text": ""
-      }
+      },
+      "protocolMappers": [
+        {
+          "id": "f92e962e-39f8-4b0b-a626-a9e22c3086c9",
+          "name": "audiencia m7-tarifas",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "m7-tarifas",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     },
     {
       "id": "87776c91-dcaf-476b-b2b2-c6d54cdf175d",
@@ -1241,7 +1353,22 @@
         "display.on.consent.screen": "true",
         "gui.order": "",
         "consent.screen.text": ""
-      }
+      },
+      "protocolMappers": [
+        {
+          "id": "c8a10c51-46ea-41d9-9bba-6e739fab8033",
+          "name": "audiencia m7-tarifas",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "m7-tarifas",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     },
     {
       "id": "0e736e39-fa43-4725-822f-9940626be30e",
@@ -1253,7 +1380,22 @@
         "display.on.consent.screen": "true",
         "gui.order": "",
         "consent.screen.text": ""
-      }
+      },
+      "protocolMappers": [
+        {
+          "id": "3c643502-5cec-459c-a113-802330e30bd4",
+          "name": "audiencia m7-tarifas",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "m7-tarifas",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     },
     {
       "id": "4711e10f-02a6-44ac-a84d-7842f05a4685",
@@ -1334,7 +1476,22 @@
         "display.on.consent.screen": "true",
         "gui.order": "",
         "consent.screen.text": ""
-      }
+      },
+      "protocolMappers": [
+        {
+          "id": "9c4723ed-4ddf-4aac-9814-c60ef845376f",
+          "name": "audiencia m7-tarifas",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "m7-tarifas",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     },
     {
       "id": "a67fb9d0-abfd-42ff-9a99-f10db356bd01",
@@ -2254,5 +2411,17 @@
   },
   "clientPolicies": {
     "policies": []
-  }
+  },
+  "users": [
+    {
+      "id": "b5123141-fa90-47c0-b68f-d9dc3967ad98",
+      "username": "service-account-m7-tarifas",
+      "enabled": true,
+      "serviceAccountClientId": "m7-tarifas",
+      "realmRoles": [
+        "default-roles-ds-2026-realm",
+        "servicio"
+      ]
+    }
+  ]
 }

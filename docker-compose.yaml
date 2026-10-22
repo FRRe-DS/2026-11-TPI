@@ -1,38 +1,91 @@
 services:
-  # 1. Módulo 1 - Identidad y Acceso (Keycloak local para pruebas)
+  # 1. Base de datos propia de M7 (RNF-05)
+  postgres:
+    image: postgres:16.4-alpine
+    container_name: m7_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-m7}
+      POSTGRES_USER: ${POSTGRES_USER:-m7}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta definir POSTGRES_PASSWORD en el archivo .env}
+    ports:
+      - "5432:5432"
+    volumes:
+      - m7_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # 2. Módulo 1 - Identidad y Acceso (Keycloak local para pruebas)
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.0
     container_name: m1_keycloak
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KC_PASSWORD:?Falta definir KC_PASSWORD en el archivo .env}
+      # El realm lo toma del placeholder ${M7_CLIENT_SECRET} al importarse
+      M7_CLIENT_SECRET: ${M7_CLIENT_SECRET:?Falta definir M7_CLIENT_SECRET en el archivo .env}
     ports:
       - "8080:8080"
     volumes:
       - ./realm-config:/opt/keycloak/data/import
-    command: 
+    command:
       - start-dev
       - --import-realm
 
-  # 2. Aplicación Backend (FastAPI)
+  # 3. Aplicación Backend (FastAPI). Aplica las migraciones al arrancar.
   api:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: m7-tarifas-api:0.2.0
     container_name: m7_fastapi
     restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
-      - SUPABASE_URL=${SUPABASE_URL:-}
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-m7}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-m7}
       # Los tokens se piden desde el host, así que el "iss" es localhost;
       # las claves públicas se descargan por la red interna de Docker.
       - KEYCLOAK_ISSUER_URI=http://localhost:8080/realms/ds-2026-realm
       - KEYCLOAK_JWKS_URI=http://keycloak:8080/realms/ds-2026-realm/protocol/openid-connect/certs
+      - KEYCLOAK_AUDIENCE=m7-tarifas
       - AUTH_DISABLED=${AUTH_DISABLED:-false}
       - PASARELA_WEBHOOK_SECRET=${PASARELA_WEBHOOK_SECRET:-}
+      - PASARELA_TIMEOUT_S=${PASARELA_TIMEOUT_S:-3}
+      - COMISION_PLATAFORMA=${COMISION_PLATAFORMA:-0.20}
+      - ESTIMACION_VIGENCIA_MIN=${ESTIMACION_VIGENCIA_MIN:-15}
+      - CANCELACION_PERIODO_GRACIA_MIN=${CANCELACION_PERIODO_GRACIA_MIN:-5}
+      - CANCELACION_CARGO_ASIGNADO=${CANCELACION_CARGO_ASIGNADO:-500}
+      - CANCELACION_CARGO_CONDUCTOR_EN_PUNTO=${CANCELACION_CARGO_CONDUCTOR_EN_PUNTO:-1000}
       - M4_UBICACION_URL=${M4_UBICACION_URL:-}
       - M6_VIAJES_URL=${M6_VIAJES_URL:-}
       - M9_RESERVAS_URL=${M9_RESERVAS_URL:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     depends_on:
-      - keycloak
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+
+  # 4. Base descartable para los tests de integración: docker compose --profile test up -d db-test
+  db-test:
+    profiles: ["test"]
+    image: postgres:16.4-alpine
+    container_name: m7_db_test
+    environment:
+      POSTGRES_DB: m7_test
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+
+volumes:
+  m7_pgdata:

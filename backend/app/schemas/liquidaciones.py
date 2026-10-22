@@ -3,7 +3,7 @@ from decimal import Decimal
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class EstadoLiquidacion(str, Enum):
@@ -25,12 +25,16 @@ class LiquidacionCreate(BaseModel):
 
 
 class Liquidacion(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     beneficiario_id: UUID
     periodo_desde: date
     periodo_hasta: date
     pago_ids: list[UUID]
     monto_bruto: Decimal
+    # Porcentaje aplicado al generarla (COMISION_PLATAFORMA vigente en ese momento)
+    comision_porcentaje: Decimal
     comision_plataforma: Decimal
     monto_neto: Decimal
     moneda: str = "ARS"
@@ -41,7 +45,7 @@ class Liquidacion(BaseModel):
 
 
 class TransferenciaConfirmacion(BaseModel):
-    referencia_transferencia: str
+    referencia_transferencia: str = Field(min_length=1, max_length=100)
 
 
 class Saldo(BaseModel):
