@@ -85,8 +85,9 @@ def test_reembolsos_simultaneos_no_superan_lo_cobrado(client, actores, pasarela)
     pago = pago_capturado(client, actores, monto="1000", con_tarjeta=True)
 
     resultados = en_paralelo(
-        lambda db: pagos.reembolsar(db, pago["id"], ReembolsoCreate(monto=Decimal("400"), motivo="x"), None, SERVICIO,
-                                    pasarela)
+        lambda db: pagos.reembolsar(
+            db, pago["id"], ReembolsoCreate(monto=Decimal("400"), motivo="x"), None, SERVICIO, pasarela
+        )
     )
 
     exitosos = [r for r in resultados if not isinstance(r, Exception)]

@@ -10,11 +10,11 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import insert, text
 
-from alembic import command
-from alembic.config import Config
 from app.core.config import settings
 from app.db import models
 from app.db.session import engine

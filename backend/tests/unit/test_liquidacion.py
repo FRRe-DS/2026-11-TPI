@@ -62,7 +62,12 @@ def test_una_liquidacion_pendiente_se_transfiere_o_anula(nuevo):
 
 @pytest.mark.parametrize(
     ("actual", "nuevo"),
-    [(L.transferida, L.anulada), (L.transferida, L.transferida), (L.anulada, L.transferida), (L.pendiente, L.pendiente)],
+    [
+        (L.transferida, L.anulada),
+        (L.transferida, L.transferida),
+        (L.anulada, L.transferida),
+        (L.pendiente, L.pendiente),
+    ],
 )
 def test_transiciones_invalidas_de_liquidacion(actual, nuevo):
     with pytest.raises(ErrorDominio) as error:

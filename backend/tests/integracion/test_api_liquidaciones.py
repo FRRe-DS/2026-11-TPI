@@ -34,7 +34,9 @@ def test_comision_configurable(client, actores, monkeypatch):
 
 def test_descuenta_reembolsos_e_ignora_pagos_no_cobrados(client, actores):
     pago = pago_capturado(client, actores, monto="1000")
-    client.post(f"/api/v1/pagos/{pago['id']}/reembolsos", json={"monto": "400", "motivo": "x"}, headers=actores.operador)
+    client.post(
+        f"/api/v1/pagos/{pago['id']}/reembolsos", json={"monto": "400", "motivo": "x"}, headers=actores.operador
+    )
     autorizar(client, actores)  # autorizado, todavía no cobrado
 
     liq = liquidar(client, actores).json()

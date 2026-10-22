@@ -51,7 +51,9 @@ def test_m4_estima_la_ruta():
 def test_m6_obtiene_el_viaje():
     viaje_id = uuid4()
     t = transporte(
-        httpx.Response(200, json={"id": str(viaje_id), "estado": "asignado", "asignado_en": "2026-10-22T12:00:00+00:00"})
+        httpx.Response(
+            200, json={"id": str(viaje_id), "estado": "asignado", "asignado_en": "2026-10-22T12:00:00+00:00"}
+        )
     )
 
     viaje = ClienteM6("http://m6/", t).obtener_viaje(viaje_id)
@@ -63,7 +65,9 @@ def test_m6_obtiene_el_viaje():
 
 def test_m9_obtiene_la_reserva():
     reserva_id, cliente_id = uuid4(), uuid4()
-    t = transporte(httpx.Response(200, json={"id": str(reserva_id), "cliente_id": str(cliente_id), "estado": "confirmada"}))
+    t = transporte(
+        httpx.Response(200, json={"id": str(reserva_id), "cliente_id": str(cliente_id), "estado": "confirmada"})
+    )
 
     assert ClienteM9("http://m9", t).obtener_reserva(reserva_id).cliente_id == cliente_id
 

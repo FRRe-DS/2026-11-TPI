@@ -18,9 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
 from app.core import security  # noqa: E402
 from app.core.config import settings  # noqa: E402
 
-TODOS_LOS_SCOPES = (
-    "tarifas:read tarifas:write pagos:read pagos:write liquidaciones:read liquidaciones:write"
-)
+TODOS_LOS_SCOPES = "tarifas:read tarifas:write pagos:read pagos:write liquidaciones:read liquidaciones:write"
 
 
 class _ClaveFirma:

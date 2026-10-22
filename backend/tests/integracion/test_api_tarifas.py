@@ -5,8 +5,13 @@ from app.services.integraciones import DependenciaNoDisponible, RutaEstimada
 
 D = Decimal
 URL = "/api/v1/tarifas"
-REGLA = {"tipo_vehiculo": "auto", "tarifa_base": "1000", "precio_por_km": "500", "precio_por_minuto": "70",
-         "tarifa_minima": "2500"}
+REGLA = {
+    "tipo_vehiculo": "auto",
+    "tarifa_base": "1000",
+    "precio_por_km": "500",
+    "precio_por_minuto": "70",
+    "tarifa_minima": "2500",
+}
 
 
 def estimar(client, headers, **datos):
@@ -36,8 +41,9 @@ def test_estimacion_con_origen_y_destino_consulta_a_m4(client, actores, m4, inte
     m4.ruta = RutaEstimada(D("4"), D("8"))
     puntos = {"origen": {"lat": -27.45, "lng": -58.98}, "destino": {"lat": -27.47, "lng": -58.83}}
 
-    respuesta = estimar(client, actores.cliente, distancia_km=None, duracion_estimada_min=None, tipo_vehiculo="moto",
-                        **puntos)
+    respuesta = estimar(
+        client, actores.cliente, distancia_km=None, duracion_estimada_min=None, tipo_vehiculo="moto", **puntos
+    )
 
     # moto: 500 + 250*4 + 40*8 = 1820
     assert D(respuesta.json()["desglose"]["total"]) == D("1820")
@@ -120,8 +126,9 @@ def test_reactivar_una_regla_desactiva_la_vigente(client, actores):
     vieja = regla_activa(client, actores.operador)
     nueva = client.post(f"{URL}/reglas", json=REGLA, headers=actores.operador).json()
 
-    respuesta = client.patch(f"{URL}/reglas/{vieja['id']}", json={"activa": True, "precio_por_km": "460"},
-                             headers=actores.operador)
+    respuesta = client.patch(
+        f"{URL}/reglas/{vieja['id']}", json={"activa": True, "precio_por_km": "460"}, headers=actores.operador
+    )
 
     assert D(respuesta.json()["precio_por_km"]) == D("460")
     assert regla_activa(client, actores.operador)["id"] == vieja["id"]

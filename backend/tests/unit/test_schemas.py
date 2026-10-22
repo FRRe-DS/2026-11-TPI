@@ -32,7 +32,9 @@ def test_estimacion_con_distancia_y_duracion():
 
 
 def test_estimacion_con_origen_y_destino():
-    EstimacionRequest(tipo_vehiculo="moto", origen={"lat": -27.45, "lng": -58.98}, destino={"lat": -27.47, "lng": -58.83})
+    EstimacionRequest(
+        tipo_vehiculo="moto", origen={"lat": -27.45, "lng": -58.98}, destino={"lat": -27.47, "lng": -58.83}
+    )
 
 
 @pytest.mark.parametrize(
@@ -114,15 +116,22 @@ def test_metodos_de_pago_invalidos(datos):
         MetodoPagoCreate(cliente_id=uuid4(), **datos)
 
 
-@pytest.mark.parametrize("numero", [VISA, "5555555555554444", "378282246310005", "4000000000000002", "4000000000000119"])
+@pytest.mark.parametrize(
+    "numero", [VISA, "5555555555554444", "378282246310005", "4000000000000002", "4000000000000119"]
+)
 def test_luhn_acepta_tarjetas_de_prueba(numero):
     assert luhn_valido(numero)
 
 
 @pytest.mark.parametrize(
     ("numero", "marca"),
-    [(VISA, "visa"), ("5555555555554444", "mastercard"), ("2221000000000009", "mastercard"), ("378282246310005", "amex"),
-     ("6011111111111117", "otra")],
+    [
+        (VISA, "visa"),
+        ("5555555555554444", "mastercard"),
+        ("2221000000000009", "mastercard"),
+        ("378282246310005", "amex"),
+        ("6011111111111117", "otra"),
+    ],
 )
 def test_marca_de_tarjeta(numero, marca):
     assert marca_tarjeta(numero) == marca

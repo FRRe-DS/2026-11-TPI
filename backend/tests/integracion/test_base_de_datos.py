@@ -1,10 +1,10 @@
 """Migraciones, inmutabilidad del historial y restricciones de la base."""
 
 import pytest
-from sqlalchemy.exc import DBAPIError, IntegrityError
-
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
+from sqlalchemy.exc import DBAPIError, IntegrityError
+
 from app.db import models
 from app.db.session import engine
 from tests.integracion.conftest import autorizar, ejecutar_sql, pago_capturado
@@ -55,9 +55,13 @@ def test_un_solo_cobro_vigente_por_viaje_en_la_base(client, actores):
 
 
 def test_los_montos_se_guardan_como_numeric():
-    tipos = ejecutar_sql(
-        "SELECT DISTINCT data_type FROM information_schema.columns"
-        " WHERE table_schema = 'public' AND column_name LIKE 'monto%'"
-    ).scalars().all()
+    tipos = (
+        ejecutar_sql(
+            "SELECT DISTINCT data_type FROM information_schema.columns"
+            " WHERE table_schema = 'public' AND column_name LIKE 'monto%'"
+        )
+        .scalars()
+        .all()
+    )
 
     assert tipos == ["numeric"]

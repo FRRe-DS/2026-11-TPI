@@ -15,6 +15,10 @@ select = ["E", "F", "I", "B", "UP", "S"]
 # UP017/UP042: se mantiene el estilo actual (timezone.utc y enums str, Enum)
 ignore = ["B008", "UP017", "UP042"]
 
+[tool.ruff.lint.isort]
+# La carpeta alembic/ de migraciones no es el paquete alembic
+known-third-party = ["alembic"]
+
 [tool.ruff.lint.per-file-ignores]
 # assert y valores fijos de prueba son esperables en los tests
 "tests/**" = ["S101", "S105", "S106"]
