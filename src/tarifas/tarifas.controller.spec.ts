@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TarifasController } from './tarifas.controller';
 import { TarifasService } from './tarifas.service';
+import { jest } from '@jest/globals';
 
 describe('TarifasController', () => {
   let controller: TarifasController;

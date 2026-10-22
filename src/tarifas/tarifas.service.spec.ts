@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TarifasService } from './tarifas.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { TarifaEstimada } from './entities/tarifa-estimada.entity';
+import { jest } from '@jest/globals';
 
 describe('TarifasService', () => {
   let service: TarifasService;
@@ -28,7 +29,7 @@ describe('TarifasService', () => {
   });
 
   it('debería calcular el monto correctamente al estimar', async () => {
-    const dto = { id_reserva: 'res-test', distancia_km: 10, tiempo_minutos: 15 };
+    const dto = { id_reserva: 'res-test', distancia_km: 10, tiempo_minutos: 15, tipo_vehiculo: 'AUTO' };
     
     // Cálculo esperado: 1000 + (10 * 150) + (15 * 50) = 3250
     const resultado = await service.estimarTarifa(dto);
