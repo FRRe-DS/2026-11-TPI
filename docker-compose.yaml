@@ -16,6 +16,25 @@ services:
       - start-dev
       - --import-realm
 
+services:
+  db:
+    image: mysql:8.0
+    container_name: mysql_m7_pagos
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password_seguro
+      MYSQL_DATABASE: m7_pagos
+      MYSQL_USER: backend_user
+      MYSQL_PASSWORD: backend_password
+    ports:
+      - "3306:3306" # Permite que MySQL Workbench se conecte desde tu máquina física
+    volumes:
+      - db_data:/var/lib/mysql # Persistencia de datos
+      - ./init-db:/docker-entrypoint-initdb.d # Ejecuta el script al iniciar por primera vez
+
+volumes:
+  db_data:
+
   # 2. Aplicación Backend (FastAPI) - COMENTADA HASTA QUE HAYA CÓDIGO
   # api:
   #   build:
