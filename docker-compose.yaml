@@ -22,10 +22,10 @@ services:
     container_name: mysql_m7_pagos
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: root_password_seguro
-      MYSQL_DATABASE: m7_pagos
-      MYSQL_USER: backend_user
-      MYSQL_PASSWORD: backend_password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-admin}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-m7}
+      MYSQL_USER: ${MYSQL_USER:-m7}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-admin}
     ports:
       - "3306:3306" # Permite que MySQL Workbench se conecte desde tu máquina física
     volumes:
