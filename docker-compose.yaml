@@ -16,7 +16,7 @@ services:
       - start-dev
       - --import-realm
 
-services:
+
   db:
     image: mysql:8.0
     container_name: mysql_m7_pagos
