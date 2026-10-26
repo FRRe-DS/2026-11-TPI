@@ -5,42 +5,70 @@ import pymysql
 
 app = FastAPI(title="M7 - Tarifas y Pagos")
 
-# 1. Conexión directa a MySQL
 def obtener_conexion():
     return pymysql.connect(
         host="localhost",
         port=3306,
-        user="m7",          # o "root"
-        password="admin",   # la que definiste en tu .env
-        database="m7",      # el nombre que pusiste en tu .env
+        user="m7",
+        password="admin",
+        database="m7",
         cursorclass=pymysql.cursors.DictCursor
     )
 
-# 2. Esquema de los datos que van a entrar por el endpoint
 class EstimacionRequest(BaseModel):
-    tipo_vehiculo: str  # 'auto' o 'moto'
+    tipo_vehiculo: str
     distancia_km: float
     tiempo_min: float
 
-# 3. EL ENDPOINT (RF-7.1)
 @app.post("/tarifas/estimar")
 def estimar_tarifa(datos: EstimacionRequest):
-    # Validaciones básicas
-    if datos.distancia_km < 0 or datos.tiempo_min < 0:
-        raise HTTPException(status_code=400, detail="M7_DATOS_INVALIDOS")
+    errores = []
 
+    # 1. Validar tipo de vehículo ('auto' o 'moto')
+    if datos.tipo_vehiculo.lower() not in ["auto", "moto"]:
+        errores.append({
+            "campo": "tipo_vehiculo",
+            "error": "VEHICULO INVALIDO",
+            "mensaje": f"El tipo de vehículo '{datos.tipo_vehiculo}' no es válido. Debe ser 'auto' o 'moto'."
+        })
+
+    # 2. Validar distancia (no negativa)
+    if datos.distancia_km < 0:
+        errores.append({
+            "campo": "distancia_km",
+            "error": "DISTANCIA NEGATIVA",
+            "mensaje": "La distancia en km no puede ser negativa."
+        })
+
+    # 3. Validar tiempo (estrictamente mayor a 0)
+    if datos.tiempo_min <= 0:
+        errores.append({
+            "campo": "tiempo_min",
+            "error": "TIEMPO INVALIDO",
+            "mensaje": "El tiempo en minutos debe ser mayor a 0."
+        })
+
+    # Si se detectó uno o más errores, lanzar HTTP 400 con la lista completa
+    if errores:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "codigo": "M7_DATOS_INVALIDOS",
+                "errores": errores
+            }
+        )
+
+    # Consulta a la base de datos
     conexion = obtener_conexion()
     try:
         with conexion.cursor() as cursor:
-            # Buscamos los parámetros de la tabla que ya creaste en MySQL
             query = "SELECT * FROM parametros_tarifa WHERE tipo_vehiculo = %s"
-            cursor.execute(query, (datos.tipo_vehiculo,))
+            cursor.execute(query, (datos.tipo_vehiculo.lower(),))
             param = cursor.fetchone()
 
             if not param:
                 raise HTTPException(status_code=404, detail="M7_SIN_PARAMETROS")
 
-            # Fórmula: base + (por_km * km) + (por_min * min)
             base = float(param["base"])
             por_km = float(param["por_km"])
             por_min = float(param["por_min"])
@@ -50,11 +78,10 @@ def estimar_tarifa(datos: EstimacionRequest):
             costo_tiempo = round(por_min * datos.tiempo_min, 2)
             subtotal = base + costo_distancia + costo_tiempo
             
-            # La tarifa no puede ser menor a la mínima establecida
             total = round(max(subtotal, minima), 2)
 
             return {
-                "tipo_vehiculo": datos.tipo_vehiculo,
+                "tipo_vehiculo": datos.tipo_vehiculo.lower(),
                 "base": base,
                 "distancia": costo_distancia,
                 "tiempo": costo_tiempo,
@@ -64,4 +91,4 @@ def estimar_tarifa(datos: EstimacionRequest):
                 "moneda": "ARS"
             }
     finally:
-        conexion.close()    
+        conexion.close()
