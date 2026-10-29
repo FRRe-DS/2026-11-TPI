@@ -1,6 +1,30 @@
+# Entornos virtuales
 venv/
 .venv/
+ENV/
+env/
+
+# Byte-compiled / optimizados
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# Variables de entorno
 .env
+.env.local
+.env.*.local
+
+# Logs
 *.log
+
+# Testing y Cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDEs y SO
+.DS_Store
+*.swp
+*.swo
+.idea/

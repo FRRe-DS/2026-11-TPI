@@ -3,5 +3,13 @@
         "*.hs": "haskell",
         "plyconfig.json": "jsonc"
     },
-    "python-envs.defaultEnvManager": "ms-python.python:system"
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/backend",
+        "backend"
+    ],
+    "python.autoComplete.extraPaths": [
+        "${workspaceFolder}/backend",
+        "backend"
+    ]
 }
