@@ -32,26 +32,25 @@ services:
       - db_data:/var/lib/mysql # Persistencia de datos
       - ./init-db:/docker-entrypoint-initdb.d # Ejecuta el script al iniciar por primera vez
 
-  # Aplicación Backend (FastAPI) - DESCOMENTAR cuando exista el Dockerfile
-  # api:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   container_name: m7_fastapi
-  #   restart: unless-stopped
-  #   ports:
-  #     - "8000:8000"
-  #   environment:
-  #     DATABASE_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE:-m7_pagos}
-  #     KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/ds-2026-realm
-  #     M4_UBICACION_URL: ${M4_UBICACION_URL}
-  #     M6_VIAJES_URL: ${M6_VIAJES_URL}
-  #     M9_RESERVAS_URL: ${M9_RESERVAS_URL}
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-  #     keycloak:
-  #       condition: service_started
+  api:
+   build:
+     context: ./backend
+     dockerfile: Dockerfile
+   container_name: m7_fastapi
+   restart: unless-stopped
+   ports:
+     - "8000:8000"
+   environment:
+     DATABASE_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE:-m7_pagos}
+     KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/ds-2026-realm
+     M4_UBICACION_URL: ${M4_UBICACION_URL}
+     M6_VIAJES_URL: ${M6_VIAJES_URL}
+     M9_RESERVAS_URL: ${M9_RESERVAS_URL}
+   depends_on:
+     db:
+       condition: service_healthy
+     keycloak:
+       condition: service_started
   
 volumes:
   db_data:
