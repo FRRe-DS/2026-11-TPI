@@ -20,7 +20,7 @@ Nuestro microservicio es el corazón financiero de la plataforma. Nos encargamos
 
 Nos integramos con Reservas (M9), Viajes (M6), Ubicación (M4) y Solicitudes (M5) mediante su API y tokens JWT de M1 (Keycloak).
 
-📄 Documentación: [contrato OpenAPI](contratos/m7_tarifas/openapi.yml) · [catálogo de eventos](docs/eventos.md) · [decisiones y supuestos](docs/decisiones.md)
+📄 Documentación: [matriz de requerimientos](docs/requerimientos.md) · [contrato OpenAPI](contratos/m7_tarifas/openapi.yml) · [catálogo de eventos](docs/eventos.md) · [decisiones y supuestos](docs/decisiones.md)
 
 ---
 
@@ -35,6 +35,44 @@ Nos integramos con Reservas (M9), Viajes (M6), Ubicación (M4) y Solicitudes (M5
 *   👤 **Salas Juliana**
 *   👤 **Sarachaga Lautaro Leonel**
 *   👤 **Toledo Francisco Santiago**
+
+---
+
+## 📂 Estructura del Repositorio
+
+El proyecto implementa una arquitectura modular en capas para el microservicio FastAPI, separando la infraestructura, contratos, documentación y código:
+
+```text
+2026-11-TPI/
+├── .github/workflows/          # Integración Continua (CI en GitHub Actions con PostgreSQL)
+├── backend/                    # Microservicio FastAPI
+│   ├── alembic/                # Control de versiones y migraciones de BD (Alembic)
+│   │   └── versions/           # Scripts de migración (0001 esquema inicial, 0002 reglas)
+│   ├── app/                    # Código fuente de la aplicación
+│   │   ├── core/               # Configuración (Pydantic Settings), seguridad (JWT) y errores RFC 9457
+│   │   ├── db/                 # Conexión SQLAlchemy y modelos declarativos de PostgreSQL
+│   │   ├── routers/            # Controladores de la API REST (/api/v1)
+│   │   ├── schemas/            # DTOs y validación de entrada/salida (Pydantic v2)
+│   │   ├── services/           # Lógica de dominio (pagos, pasarela, tarifas, liquidaciones)
+│   │   └── main.py             # Instancia FastAPI, middlewares de correlación y healthcheck
+│   ├── tests/                  # Suite de pruebas automatizadas
+│   │   ├── unit/               # Tests unitarios de lógica pura sin dependencias
+│   │   └── integracion/        # Tests de integración contra PostgreSQL real
+│   ├── Dockerfile              # Empaquetado Docker de la API
+│   ├── pyproject.toml          # Configuración de Ruff, Pytest y Cobertura
+│   ├── requirements.txt        # Dependencias de producción
+│   └── requirements-dev.txt    # Dependencias de desarrollo y testing
+├── contratos/                  # Contratos estandarizados con otros módulos del consorcio
+│   └── m7_tarifas/             # Contrato OpenAPI 3.0 (YAML) verificado por tests
+├── docs/                       # Documentación técnica y de arquitectura
+│   ├── requerimientos.md       # Trazabilidad de requerimientos funcionales (RF-7.1 a RF-7.8)
+│   ├── decisiones.md           # Registro de decisiones técnicas y supuestos (ADRs)
+│   └── eventos.md              # Catálogo de eventos de dominio asíncronos
+├── realm-config/               # Configuración del Realm Keycloak (ds-2026-realm.json)
+├── docker-compose.yaml         # Orquestación de contenedores (PostgreSQL, Keycloak, FastAPI, DB Test)
+├── .env.example                # Variables de entorno documentadas
+└── README.md                   # Documentación principal del proyecto
+```
 ---
 
 ## 🛠️ Guía de Inicio Rápido (Para el equipo)

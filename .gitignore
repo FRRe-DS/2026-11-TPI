@@ -1,10 +1,40 @@
-venv/
+# Python y bytecode
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# Variables de entorno locales y secretos
 .env
-*.log
+.env.local
+*.env
+
+# Testing y cobertura
 .pytest_cache/
 .ruff_cache/
 .coverage
+.coverage.*
 coverage.xml
 htmlcov/
+*.log
+
+# Editores e IDEs
+.idea/
+.vscode/*
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+Desktop.ini

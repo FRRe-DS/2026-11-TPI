@@ -1,6 +1,14 @@
 {
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/backend"
+    ],
+    "python.autoComplete.extraPaths": [
+        "${workspaceFolder}/backend"
+    ],
+    "python.terminal.useEnvFile": true,
     "files.associations": {
-        "*.hs": "haskell",
-        "plyconfig.json": "jsonc"
+        "*.sql": "sql",
+        "*.yaml": "yaml",
+        "*.yml": "yaml"
     }
 }
