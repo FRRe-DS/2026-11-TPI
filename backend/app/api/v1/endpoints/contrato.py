@@ -25,7 +25,7 @@ from app.schemas.tarifas import (
 )
 
 
-router = APIRouter(prefix="/api/v1", tags=["Contrato OpenAPI"])
+router = APIRouter(prefix="/api/v1")
 
 
 def _redondear(valor: Any) -> float:
