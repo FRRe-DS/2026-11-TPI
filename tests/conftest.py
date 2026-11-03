@@ -1,7 +1,11 @@
 import sys
+import asyncio
 from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Asegurar que el directorio backend/ esté en sys.path tanto para ejecución local como pytest
 BACKEND_DIR = Path(__file__).resolve().parent.parent / "backend"
