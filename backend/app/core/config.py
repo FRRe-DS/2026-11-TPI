@@ -14,6 +14,7 @@ class Settings:
     MYSQL_USER: str = os.getenv("MYSQL_USER", "m7")
     MYSQL_PASSWORD: str = os.getenv("MYSQL_PASSWORD", "admin")
     MYSQL_DATABASE: str = os.getenv("MYSQL_DATABASE", "m7")
+    database_url: str = "mysql+pymysql://m7:m7local@localhost:3306/m7"
 
     # Keycloak / Seguridad
     AUTH_DISABLED: bool = os.getenv("AUTH_DISABLED", "true").lower() == "true"
