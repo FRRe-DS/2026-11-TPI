@@ -155,4 +155,11 @@ INSERT INTO parametros_tarifa
 VALUES 
   ('auto', 500.00, 150.00, 50.00, 800.00, 400.00, 15.00),
   ('moto', 350.00, 100.00, 35.00, 500.00, 250.00, 12.00);
+
+INSERT INTO reglas_tarifa
+  (id, tipo_vehiculo, tarifa_base, precio_por_km, precio_por_minuto, tarifa_minima,
+   cargo_cancelacion, activa)
+SELECT UUID(), tipo_vehiculo, base, por_km, por_min, minima, cargo_cancelacion, TRUE
+FROM parametros_tarifa
+WHERE NOT EXISTS (SELECT 1 FROM reglas_tarifa);
   

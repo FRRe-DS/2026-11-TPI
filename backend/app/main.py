@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from app.db.session import get_db
+from app.core.database import asegurar_esquema_contrato
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -26,6 +27,12 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+
+
+try:
+    asegurar_esquema_contrato()
+except Exception:
+    pass
 
 
 @app.middleware("http")
