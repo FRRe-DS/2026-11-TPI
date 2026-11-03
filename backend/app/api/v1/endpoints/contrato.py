@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4, uuid5, NAMESPACE_URL
 
 from fastapi import APIRouter, Header, HTTPException, Response
+from app.core.database import get_db
 
 from app.schemas.tarifas import (
     EstimacionNueva,
@@ -99,12 +100,16 @@ def obtener_tarifa_final(viaje_id: UUID) -> Dict[str, Any]:
 
 
 def _pagina(items: List[Dict[str, Any]], page: int, size: int) -> Dict[str, Any]:
+    if page < 0:
+        raise HTTPException(status_code=422, detail="page debe ser mayor o igual a cero")
+    if size < 1 or size > 100:
+        raise HTTPException(status_code=422, detail="size debe estar entre 1 y 100")
     inicio = page * size
     contenido = items[inicio:inicio + size]
     total_paginas = (len(items) + size - 1) // size
     return {
-        "pagina": page,
-        "tamano": size,
+        "page": page,
+        "size": size,
         "total_elementos": len(items),
         "total_paginas": total_paginas,
         "items": contenido,
@@ -135,6 +140,22 @@ def crear_regla(datos: ReglaTarifaNueva, response: Response) -> Dict[str, Any]:
                 regla["activa"] = False
     regla = {"id": regla_id, **datos.model_dump()}
     reglas[regla_id] = regla
+    if datos.activa:
+        try:
+            with get_db() as conexion:
+                with conexion.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        UPDATE parametros_tarifa
+                        SET base=%s, por_km=%s, por_min=%s, minima=%s, cargo_cancelacion=%s
+                        WHERE tipo_vehiculo=%s
+                        """,
+                        (datos.tarifa_base, datos.precio_por_km, datos.precio_por_minuto,
+                         datos.tarifa_minima, datos.cargo_cancelacion, datos.tipo_vehiculo),
+                    )
+                conexion.commit()
+        except Exception:
+            pass
     response.headers["Location"] = f"/api/v1/tarifas/reglas/{regla_id}"
     return regla
 

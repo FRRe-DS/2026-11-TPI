@@ -42,7 +42,7 @@ class PagoNuevo(BaseModel):
     reserva_id: Optional[UUID4] = None
     cliente_id: UUID4
     beneficiario_id: UUID4
-    monto: float = Field(gt=0)
+    monto: float = Field(gt=0, le=1_000_000_000)
     metodo: Literal["tarjeta", "efectivo", "billetera_virtual"]
 
 
@@ -74,5 +74,5 @@ class AvisoPasarela(BaseModel):
 class ReembolsoNuevo(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    monto: Optional[float] = Field(default=None, gt=0)
+    monto: Optional[float] = Field(default=None, gt=0, le=1_000_000_000)
     motivo: str = Field(min_length=1, max_length=500)

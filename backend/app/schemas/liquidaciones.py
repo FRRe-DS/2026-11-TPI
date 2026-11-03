@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Optional
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class LiquidacionRequest(BaseModel):
@@ -26,4 +26,4 @@ class LiquidacionNueva(BaseModel):
 class TransferenciaNueva(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    referencia_transferencia: str
+    referencia_transferencia: str = Field(min_length=1, max_length=100)
