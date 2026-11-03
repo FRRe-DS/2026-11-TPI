@@ -56,9 +56,9 @@ docker compose up -d
 
 **En Windows (PowerShell):**
 ```powershell
-python -m venv .venv
+py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 **En macOS / Linux (Bash / Zsh):**

@@ -6,7 +6,6 @@ from app.services.tarifas import calcular_estimacion_tarifa, obtener_todos_los_p
 
 router = APIRouter(prefix="/tarifas", tags=["Tarifas"])
 
-
 @router.get("/parametros")
 def obtener_parametros() -> List[Dict[str, Any]]:
     """Obtiene los parámetros actuales de tarificación configurados en la base de datos."""

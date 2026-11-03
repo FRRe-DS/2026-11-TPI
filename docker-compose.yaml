@@ -56,6 +56,7 @@ services:
       M4_UBICACION_URL: ${M4_UBICACION_URL:-}
       M6_VIAJES_URL: ${M6_VIAJES_URL:-}
       M9_RESERVAS_URL: ${M9_RESERVAS_URL:-}
+      PASARELA_URL: ${PASARELA_URL:-}
     depends_on:
       db:
         condition: service_healthy

@@ -11,5 +11,6 @@
     "python.autoComplete.extraPaths": [
         "${workspaceFolder}/backend",
         "backend"
-    ]
+    ],
+    "python.terminal.useEnvFile": true
 }

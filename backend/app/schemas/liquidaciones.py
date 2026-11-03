@@ -1,4 +1,7 @@
-from pydantic import BaseModel
+from datetime import date
+from typing import Optional
+from uuid import UUID
+from pydantic import BaseModel, ConfigDict
 
 
 class LiquidacionRequest(BaseModel):
@@ -10,3 +13,17 @@ class LiquidacionRequest(BaseModel):
     comision: float
     neto: float
     idempotency_key: str
+
+
+class LiquidacionNueva(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    beneficiario_id: UUID
+    periodo_desde: date
+    periodo_hasta: date
+
+
+class TransferenciaNueva(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    referencia_transferencia: str
