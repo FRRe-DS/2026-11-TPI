@@ -93,6 +93,13 @@ def asegurar_esquema_contrato() -> None:
           respuesta JSON NOT NULL, creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS eventos_mensajeria_procesados (
+          event_id CHAR(36) PRIMARY KEY,
+          event_type VARCHAR(100) NOT NULL,
+          procesado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
     ]
     conexion = obtener_conexion()
     try:
