@@ -1,9 +1,13 @@
-import json
 import uuid
+from datetime import datetime
 from typing import Any, Dict, List
 from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.models.medios_pago import MedioPago
+from app.models.pagos import OperacionFinanciera, Pago
+from app.models.tarifas import ParametroTarifa
 from app.schemas.pagos import (
     CargoCancelacionRequest,
     PagoAutorizarRequest,
@@ -12,286 +16,270 @@ from app.schemas.pagos import (
 )
 
 
-def autorizar_pago(datos: PagoAutorizarRequest) -> Dict[str, Any]:
-    with get_db() as conexion:
-        with conexion.cursor() as cursor:
-            # 1. Chequeo de idempotencia
-            cursor.execute(
-                "SELECT * FROM operaciones_financieras WHERE idempotency_key = %s LIMIT 1",
-                (datos.idempotency_key,),
-            )
-            existente = cursor.fetchone()
-            if existente:
-                cursor.execute("SELECT * FROM pagos WHERE id = %s LIMIT 1", (existente["pago_id"],))
-                pago_existente = cursor.fetchone()
-                if pago_existente:
-                    return {
-                        "mensaje": "Operación ya procesada",
-                        "pago": pago_existente,
-                        "idempotency_key": datos.idempotency_key,
-                    }
-
-            # 2. Validar medio de pago si fue provisto
-            if datos.medio_pago_id:
-                cursor.execute(
-                    "SELECT * FROM medios_pago WHERE id = %s LIMIT 1",
-                    (datos.medio_pago_id,),
-                )
-                medio = cursor.fetchone()
-                if not medio:
-                    raise HTTPException(status_code=404, detail="M7_MEDIO_PAGO_NO_ENCONTRADO")
-
-            # 3. Crear pago en estado autorizado
-            pago_id = str(uuid.uuid4())
-            cursor.execute(
-                """
-                INSERT INTO pagos (
-                    id, viaje_id, cliente_id, conductor_id, medio_pago_id, tipo_vehiculo,
-                    monto_estimado, monto_final, comision_pct, estado, capturado_en,
-                    liquidacion_id, creado_en, actualizado_en
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, %s, 'autorizado', NULL, NULL, NOW(), NOW())
-                """,
-                (
-                    pago_id,
-                    datos.viaje_id,
-                    datos.cliente_id,
-                    datos.conductor_id,
-                    datos.medio_pago_id,
-                    datos.tipo_vehiculo,
-                    datos.monto_estimado,
-                    datos.comision_pct if datos.comision_pct is not None else 0,
-                ),
-            )
-
-            # 4. Registrar operación financiera
-            cursor.execute(
-                """
-                INSERT INTO operaciones_financieras (
-                    id, pago_id, tipo, monto, resultado, motivo, idempotency_key, detalle, creado_en
-                )
-                VALUES (%s, %s, 'autorizacion', %s, 'ok', 'Autorización OK', %s, %s, NOW())
-                """,
-                (
-                    str(uuid.uuid4()),
-                    pago_id,
-                    datos.monto_estimado,
-                    datos.idempotency_key,
-                    json.dumps({
-                        "viaje_id": datos.viaje_id,
-                        "cliente_id": datos.cliente_id,
-                        "medio_pago_id": datos.medio_pago_id,
-                        "monto_estimado": datos.monto_estimado,
-                    }),
-                ),
-            )
-            conexion.commit()
-
-            cursor.execute("SELECT * FROM pagos WHERE id = %s LIMIT 1", (pago_id,))
-            pago = cursor.fetchone()
+def autorizar_pago(datos: PagoAutorizarRequest, db: Session) -> Dict[str, Any]:
+    # 1. Chequeo de idempotencia
+    existente = db.scalar(
+        select(OperacionFinanciera).where(
+            OperacionFinanciera.idempotency_key == datos.idempotency_key
+        )
+    )
+    if existente:
+        pago_existente = db.scalar(select(Pago).where(Pago.id == existente.pago_id))
+        if pago_existente:
             return {
-                "mensaje": "Pago autorizado",
-                "pago": pago,
+                "mensaje": "Operación ya procesada",
+                "pago": pago_existente.to_dict(),
                 "idempotency_key": datos.idempotency_key,
             }
 
+    # 2. Validar medio de pago si fue provisto
+    if datos.medio_pago_id:
+        medio = db.scalar(select(MedioPago).where(MedioPago.id == datos.medio_pago_id))
+        if not medio:
+            raise HTTPException(status_code=404, detail="M7_MEDIO_PAGO_NO_ENCONTRADO")
 
-def capturar_pago(datos: PagoCapturarRequest) -> Dict[str, Any]:
-    with get_db() as conexion:
-        with conexion.cursor() as cursor:
-            # 1. Chequeo de idempotencia
-            cursor.execute(
-                "SELECT * FROM operaciones_financieras WHERE idempotency_key = %s LIMIT 1",
-                (datos.idempotency_key,),
-            )
-            operacion = cursor.fetchone()
-            if operacion:
-                cursor.execute("SELECT * FROM pagos WHERE id = %s LIMIT 1", (operacion["pago_id"],))
-                pago_existente = cursor.fetchone()
-                if pago_existente:
-                    return {
-                        "mensaje": "Captura ya procesada",
-                        "pago": pago_existente,
-                        "idempotency_key": datos.idempotency_key,
-                    }
+    # 3. Crear pago en estado autorizado
+    pago_id = str(uuid.uuid4())
+    ahora = datetime.now()
+    nuevo_pago = Pago(
+        id=pago_id,
+        viaje_id=datos.viaje_id,
+        cliente_id=datos.cliente_id,
+        conductor_id=datos.conductor_id,
+        medio_pago_id=datos.medio_pago_id,
+        tipo_vehiculo=datos.tipo_vehiculo,
+        monto_estimado=datos.monto_estimado,
+        monto_final=None,
+        comision_pct=datos.comision_pct if datos.comision_pct is not None else 0,
+        estado="autorizado",
+        capturado_en=None,
+        liquidacion_id=None,
+        creado_en=ahora,
+        actualizado_en=ahora,
+    )
+    db.add(nuevo_pago)
 
-            # 2. Validar existencia del pago
-            cursor.execute("SELECT * FROM pagos WHERE id = %s LIMIT 1", (datos.pago_id,))
-            pago = cursor.fetchone()
-            if not pago:
-                raise HTTPException(status_code=404, detail="M7_PAGO_NO_ENCONTRADO")
+    # 4. Registrar operación financiera
+    operacion = OperacionFinanciera(
+        id=str(uuid.uuid4()),
+        pago_id=pago_id,
+        tipo="autorizacion",
+        monto=datos.monto_estimado,
+        resultado="ok",
+        motivo="Autorización OK",
+        idempotency_key=datos.idempotency_key,
+        detalle={
+            "viaje_id": datos.viaje_id,
+            "cliente_id": datos.cliente_id,
+            "medio_pago_id": datos.medio_pago_id,
+            "monto_estimado": datos.monto_estimado,
+        },
+        creado_en=ahora,
+    )
+    db.add(operacion)
+    db.commit()
+    db.refresh(nuevo_pago)
 
-            if pago["estado"] not in ["autorizado", "cancelado_con_cargo"]:
-                raise HTTPException(status_code=409, detail="M7_PAGO_ESTADO_NO_PERMITE_CAPTURA")
+    return {
+        "mensaje": "Pago autorizado",
+        "pago": nuevo_pago.to_dict(),
+        "idempotency_key": datos.idempotency_key,
+    }
 
-            monto_final = float(datos.monto_final) if datos.monto_final is not None else float(pago["monto_estimado"])
-            cursor.execute(
-                "UPDATE pagos SET monto_final = %s, estado = 'capturado', capturado_en = NOW(), actualizado_en = NOW() WHERE id = %s",
-                (monto_final, datos.pago_id),
-            )
-            cursor.execute(
-                """
-                INSERT INTO operaciones_financieras (id, pago_id, tipo, monto, resultado, motivo, idempotency_key, detalle, creado_en)
-                VALUES (%s, %s, 'captura', %s, 'ok', 'Captura exitosa', %s, %s, NOW())
-                """,
-                (
-                    str(uuid.uuid4()),
-                    datos.pago_id,
-                    monto_final,
-                    datos.idempotency_key,
-                    json.dumps({"monto_final": monto_final, "pago_id": datos.pago_id}),
-                ),
-            )
-            conexion.commit()
 
-            cursor.execute("SELECT * FROM pagos WHERE id = %s LIMIT 1", (datos.pago_id,))
-            pago_actualizado = cursor.fetchone()
+def capturar_pago(datos: PagoCapturarRequest, db: Session) -> Dict[str, Any]:
+    # 1. Chequeo de idempotencia
+    operacion_existente = db.scalar(
+        select(OperacionFinanciera).where(
+            OperacionFinanciera.idempotency_key == datos.idempotency_key
+        )
+    )
+    if operacion_existente:
+        pago_existente = db.scalar(
+            select(Pago).where(Pago.id == operacion_existente.pago_id)
+        )
+        if pago_existente:
             return {
-                "mensaje": "Pago capturado",
-                "pago": pago_actualizado,
+                "mensaje": "Captura ya procesada",
+                "pago": pago_existente.to_dict(),
                 "idempotency_key": datos.idempotency_key,
             }
 
+    # 2. Validar existencia del pago
+    pago = db.scalar(select(Pago).where(Pago.id == datos.pago_id))
+    if not pago:
+        raise HTTPException(status_code=404, detail="M7_PAGO_NO_ENCONTRADO")
 
-def cancelar_pago(datos: CargoCancelacionRequest) -> Dict[str, Any]:
-    with get_db() as conexion:
-        with conexion.cursor() as cursor:
-            # 1. Chequeo de idempotencia
-            cursor.execute(
-                "SELECT * FROM operaciones_financieras WHERE idempotency_key = %s LIMIT 1",
-                (datos.idempotency_key,),
-            )
-            operacion = cursor.fetchone()
-            if operacion:
-                cursor.execute("SELECT * FROM pagos WHERE id = %s LIMIT 1", (operacion["pago_id"],))
-                pago_existente = cursor.fetchone()
-                if pago_existente:
-                    return {
-                        "mensaje": "Cargo de cancelación ya registrado",
-                        "pago": pago_existente,
-                        "idempotency_key": datos.idempotency_key,
-                    }
+    if pago.estado not in ["autorizado", "cancelado_con_cargo"]:
+        raise HTTPException(
+            status_code=409, detail="M7_PAGO_ESTADO_NO_PERMITE_CAPTURA"
+        )
 
-            cursor.execute("SELECT * FROM pagos WHERE id = %s LIMIT 1", (datos.pago_id,))
-            pago = cursor.fetchone()
-            if not pago:
-                raise HTTPException(status_code=404, detail="M7_PAGO_NO_ENCONTRADO")
+    ahora = datetime.now()
+    monto_final = (
+        float(datos.monto_final)
+        if datos.monto_final is not None
+        else float(pago.monto_estimado)
+    )
+    pago.monto_final = monto_final
+    pago.estado = "capturado"
+    pago.capturado_en = ahora
+    pago.actualizado_en = ahora
 
-            cursor.execute(
-                "SELECT cargo_cancelacion FROM parametros_tarifa WHERE tipo_vehiculo = %s LIMIT 1",
-                (pago["tipo_vehiculo"],),
-            )
-            param = cursor.fetchone()
-            cargo = float(param["cargo_cancelacion"]) if param else 0.0
+    operacion = OperacionFinanciera(
+        id=str(uuid.uuid4()),
+        pago_id=datos.pago_id,
+        tipo="captura",
+        monto=monto_final,
+        resultado="ok",
+        motivo="Captura exitosa",
+        idempotency_key=datos.idempotency_key,
+        detalle={"monto_final": monto_final, "pago_id": datos.pago_id},
+        creado_en=ahora,
+    )
+    db.add(operacion)
+    db.commit()
+    db.refresh(pago)
 
-            cursor.execute(
-                "UPDATE pagos SET monto_final = COALESCE(monto_final, monto_estimado), estado = 'cancelado_con_cargo', actualizado_en = NOW() WHERE id = %s",
-                (datos.pago_id,),
-            )
-            cursor.execute(
-                """
-                INSERT INTO operaciones_financieras (id, pago_id, tipo, monto, resultado, motivo, idempotency_key, detalle, creado_en)
-                VALUES (%s, %s, 'cargo_cancelacion', %s, 'ok', %s, %s, %s, NOW())
-                """,
-                (
-                    str(uuid.uuid4()),
-                    datos.pago_id,
-                    cargo,
-                    datos.motivo,
-                    datos.idempotency_key,
-                    json.dumps({"cargo_cancelacion": cargo, "motivo": datos.motivo}),
-                ),
-            )
-            conexion.commit()
+    return {
+        "mensaje": "Pago capturado",
+        "pago": pago.to_dict(),
+        "idempotency_key": datos.idempotency_key,
+    }
 
-            cursor.execute("SELECT * FROM pagos WHERE id = %s LIMIT 1", (datos.pago_id,))
-            pago_actualizado = cursor.fetchone()
+
+def cancelar_pago(datos: CargoCancelacionRequest, db: Session) -> Dict[str, Any]:
+    # 1. Chequeo de idempotencia
+    operacion_existente = db.scalar(
+        select(OperacionFinanciera).where(
+            OperacionFinanciera.idempotency_key == datos.idempotency_key
+        )
+    )
+    if operacion_existente:
+        pago_existente = db.scalar(
+            select(Pago).where(Pago.id == operacion_existente.pago_id)
+        )
+        if pago_existente:
             return {
-                "mensaje": "Cargo de cancelación registrado",
-                "cargo": cargo,
-                "pago": pago_actualizado,
+                "mensaje": "Cargo de cancelación ya registrado",
+                "pago": pago_existente.to_dict(),
                 "idempotency_key": datos.idempotency_key,
             }
 
+    pago = db.scalar(select(Pago).where(Pago.id == datos.pago_id))
+    if not pago:
+        raise HTTPException(status_code=404, detail="M7_PAGO_NO_ENCONTRADO")
 
-def reintegrar_pago(datos: ReintegroRequest) -> Dict[str, Any]:
-    with get_db() as conexion:
-        with conexion.cursor() as cursor:
-            # 1. Chequeo de idempotencia
-            cursor.execute(
-                "SELECT * FROM operaciones_financieras WHERE idempotency_key = %s LIMIT 1",
-                (datos.idempotency_key,),
-            )
-            operacion = cursor.fetchone()
-            if operacion:
-                cursor.execute("SELECT * FROM pagos WHERE id = %s LIMIT 1", (operacion["pago_id"],))
-                pago_existente = cursor.fetchone()
-                if pago_existente:
-                    return {
-                        "mensaje": "Reintegro ya registrado",
-                        "pago": pago_existente,
-                        "idempotency_key": datos.idempotency_key,
-                    }
+    param = db.scalar(
+        select(ParametroTarifa).where(
+            ParametroTarifa.tipo_vehiculo == pago.tipo_vehiculo
+        )
+    )
+    cargo = float(param.cargo_cancelacion) if param else 0.0
 
-            cursor.execute("SELECT * FROM pagos WHERE id = %s LIMIT 1", (datos.pago_id,))
-            pago = cursor.fetchone()
-            if not pago:
-                raise HTTPException(status_code=404, detail="M7_PAGO_NO_ENCONTRADO")
+    ahora = datetime.now()
+    if pago.monto_final is None:
+        pago.monto_final = pago.monto_estimado
+    pago.estado = "cancelado_con_cargo"
+    pago.actualizado_en = ahora
 
-            monto_total = float(pago["monto_final"]) if pago["monto_final"] is not None else float(pago["monto_estimado"])
-            if float(datos.monto) < 0 or float(datos.monto) > monto_total:
-                raise HTTPException(status_code=400, detail="M7_MONTO_REINTEGRO_INVALIDO")
+    operacion = OperacionFinanciera(
+        id=str(uuid.uuid4()),
+        pago_id=datos.pago_id,
+        tipo="cargo_cancelacion",
+        monto=cargo,
+        resultado="ok",
+        motivo=datos.motivo,
+        idempotency_key=datos.idempotency_key,
+        detalle={"cargo_cancelacion": cargo, "motivo": datos.motivo},
+        creado_en=ahora,
+    )
+    db.add(operacion)
+    db.commit()
+    db.refresh(pago)
 
-            nuevo_estado = "reintegrado" if float(datos.monto) >= monto_total else "reintegrado_parcial"
-            cursor.execute(
-                "UPDATE pagos SET estado = %s, actualizado_en = NOW() WHERE id = %s",
-                (nuevo_estado, datos.pago_id),
-            )
-            cursor.execute(
-                """
-                INSERT INTO operaciones_financieras (id, pago_id, tipo, monto, resultado, motivo, idempotency_key, detalle, creado_en)
-                VALUES (%s, %s, 'reintegro', %s, 'ok', %s, %s, %s, NOW())
-                """,
-                (
-                    str(uuid.uuid4()),
-                    datos.pago_id,
-                    datos.monto,
-                    datos.motivo,
-                    datos.idempotency_key,
-                    json.dumps({"monto_reintegrado": datos.monto, "estado": nuevo_estado}),
-                ),
-            )
-            conexion.commit()
+    return {
+        "mensaje": "Cargo de cancelación registrado",
+        "cargo": cargo,
+        "pago": pago.to_dict(),
+        "idempotency_key": datos.idempotency_key,
+    }
 
-            cursor.execute("SELECT * FROM pagos WHERE id = %s LIMIT 1", (datos.pago_id,))
-            pago_actualizado = cursor.fetchone()
+
+def reintegrar_pago(datos: ReintegroRequest, db: Session) -> Dict[str, Any]:
+    # 1. Chequeo de idempotencia
+    operacion_existente = db.scalar(
+        select(OperacionFinanciera).where(
+            OperacionFinanciera.idempotency_key == datos.idempotency_key
+        )
+    )
+    if operacion_existente:
+        pago_existente = db.scalar(
+            select(Pago).where(Pago.id == operacion_existente.pago_id)
+        )
+        if pago_existente:
             return {
-                "mensaje": "Reintegro registrado",
-                "pago": pago_actualizado,
-                "monto_reintegrado": datos.monto,
+                "mensaje": "Reintegro ya registrado",
+                "pago": pago_existente.to_dict(),
                 "idempotency_key": datos.idempotency_key,
             }
 
+    pago = db.scalar(select(Pago).where(Pago.id == datos.pago_id))
+    if not pago:
+        raise HTTPException(status_code=404, detail="M7_PAGO_NO_ENCONTRADO")
 
-def obtener_pago_por_viaje(viaje_id: str) -> Dict[str, Any]:
-    with get_db() as conexion:
-        with conexion.cursor() as cursor:
-            cursor.execute("SELECT * FROM pagos WHERE viaje_id = %s LIMIT 1", (viaje_id,))
-            pago = cursor.fetchone()
-            if not pago:
-                raise HTTPException(status_code=404, detail="M7_PAGO_NO_ENCONTRADO")
-            return pago
+    monto_total = (
+        float(pago.monto_final)
+        if pago.monto_final is not None
+        else float(pago.monto_estimado)
+    )
+    if float(datos.monto) < 0 or float(datos.monto) > monto_total:
+        raise HTTPException(status_code=400, detail="M7_MONTO_REINTEGRO_INVALIDO")
+
+    nuevo_estado = (
+        "reintegrado" if float(datos.monto) >= monto_total else "reintegrado_parcial"
+    )
+    ahora = datetime.now()
+    pago.estado = nuevo_estado
+    pago.actualizado_en = ahora
+
+    operacion = OperacionFinanciera(
+        id=str(uuid.uuid4()),
+        pago_id=datos.pago_id,
+        tipo="reintegro",
+        monto=datos.monto,
+        resultado="ok",
+        motivo=datos.motivo,
+        idempotency_key=datos.idempotency_key,
+        detalle={"monto_reintegrado": datos.monto, "estado": nuevo_estado},
+        creado_en=ahora,
+    )
+    db.add(operacion)
+    db.commit()
+    db.refresh(pago)
+
+    return {
+        "mensaje": "Reintegro registrado",
+        "pago": pago.to_dict(),
+        "monto_reintegrado": datos.monto,
+        "idempotency_key": datos.idempotency_key,
+    }
 
 
-def obtener_historial_financiero(viaje_id: str) -> List[Dict[str, Any]]:
-    with get_db() as conexion:
-        with conexion.cursor() as cursor:
-            cursor.execute("SELECT * FROM pagos WHERE viaje_id = %s LIMIT 1", (viaje_id,))
-            pago = cursor.fetchone()
-            if not pago:
-                raise HTTPException(status_code=404, detail="M7_PAGO_NO_ENCONTRADO")
-            cursor.execute(
-                "SELECT * FROM operaciones_financieras WHERE pago_id = %s ORDER BY creado_en DESC",
-                (pago["id"],),
-            )
-            return cursor.fetchall()
+def obtener_pago_por_viaje(viaje_id: str, db: Session) -> Dict[str, Any]:
+    pago = db.scalar(select(Pago).where(Pago.viaje_id == viaje_id))
+    if not pago:
+        raise HTTPException(status_code=404, detail="M7_PAGO_NO_ENCONTRADO")
+    return pago.to_dict()
+
+
+def obtener_historial_financiero(viaje_id: str, db: Session) -> List[Dict[str, Any]]:
+    pago = db.scalar(select(Pago).where(Pago.viaje_id == viaje_id))
+    if not pago:
+        raise HTTPException(status_code=404, detail="M7_PAGO_NO_ENCONTRADO")
+    operaciones = db.scalars(
+        select(OperacionFinanciera)
+        .where(OperacionFinanciera.pago_id == pago.id)
+        .order_by(OperacionFinanciera.creado_en.desc())
+    ).all()
+    return [op.to_dict() for op in operaciones]

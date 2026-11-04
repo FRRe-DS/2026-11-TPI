@@ -1,4 +1,11 @@
-from unittest.mock import MagicMock, patch
+def test_obtener_parametros_tarifa(client):
+    response = client.get("/tarifas/parametros")
+    assert response.status_code == 200
+    params = response.json()
+    assert len(params) == 2
+    por_tipo = {p["tipo_vehiculo"]: p for p in params}
+    assert por_tipo["auto"]["base"] == 500.0
+    assert por_tipo["moto"]["base"] == 350.0
 
 
 def test_estimar_tarifa_vehiculo_invalido(client):
@@ -47,39 +54,36 @@ def test_estimar_tarifa_tiempo_invalido(client):
 
 
 def test_estimar_tarifa_calculo_exitoso(client):
-    # Mock de los parámetros de MySQL (auto: base 500, km 150, min 50, minima 800)
-    mock_param = {
-        "tipo_vehiculo": "auto",
-        "base": 500.0,
-        "por_km": 150.0,
-        "por_min": 50.0,
-        "minima": 800.0,
-        "cargo_cancelacion": 400.0,
-        "comision_pct": 15.0,
-    }
+    response = client.post(
+        "/tarifas/estimar",
+        json={
+            "tipo_vehiculo": "auto",
+            "distancia_km": 10.0,
+            "tiempo_min": 20.0,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["tipo_vehiculo"] == "auto"
+    assert data["base"] == 500.0
+    assert data["distancia"] == 1500.0
+    assert data["tiempo"] == 1000.0
+    assert data["minima_aplicada"] is False
+    assert data["total"] == 3000.0
+    assert data["moneda"] == "ARS"
 
-    mock_cursor = MagicMock()
-    mock_cursor.fetchone.return_value = mock_param
 
-    mock_conn = MagicMock()
-    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-
-    with patch("app.services.tarifas.get_db") as mock_get_db:
-        mock_get_db.return_value.__enter__.return_value = mock_conn
-
-        response = client.post(
-            "/tarifas/estimar",
-            json={
-                "tipo_vehiculo": "auto",
-                "distancia_km": 10.0,
-                "tiempo_min": 20.0,
-            },
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["tipo_vehiculo"] == "auto"
-        assert data["base"] == 500.0
-        assert data["distancia"] == 1500.0
-        assert data["tiempo"] == 1000.0
-        assert data["total"] == 3000.0
-        assert data["moneda"] == "ARS"
+def test_estimar_tarifa_aplica_minima(client):
+    # Subtotal auto con 0.5 km y 1 min = 500 + 75 + 50 = 625 < 800 (mínima)
+    response = client.post(
+        "/tarifas/estimar",
+        json={
+            "tipo_vehiculo": "auto",
+            "distancia_km": 0.5,
+            "tiempo_min": 1.0,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["minima_aplicada"] is True
+    assert data["total"] == 800.0

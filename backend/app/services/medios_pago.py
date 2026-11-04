@@ -2,9 +2,11 @@ import re
 import uuid
 from typing import Any, Dict, List
 from fastapi import HTTPException
-import pymysql
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.models.medios_pago import MedioPago
 from app.schemas.medios_pago import MedioPagoRequest
 
 
@@ -15,7 +17,7 @@ def validar_medio_pago(datos: MedioPagoRequest) -> None:
         errores.append({
             "campo": "tipo",
             "error": "TIPO INVALIDO",
-            "mensaje": "El tipo de medio de pago debe ser 'tarjeta', 'billetera virtual' o 'efectivo'."
+            "mensaje": "El tipo de medio de pago debe ser 'tarjeta', 'billetera virtual' o 'efectivo'.",
         })
 
     if not datos.alias or not datos.alias.strip():
@@ -50,60 +52,53 @@ def validar_medio_pago(datos: MedioPagoRequest) -> None:
         )
 
 
-def registrar_medio_pago(datos: MedioPagoRequest) -> Dict[str, Any]:
+def registrar_medio_pago(datos: MedioPagoRequest, db: Session) -> Dict[str, Any]:
     validar_medio_pago(datos)
 
-    with get_db() as conexion:
-        with conexion.cursor() as cursor:
-            try:
-                if datos.predeterminado:
-                    cursor.execute(
-                        "UPDATE medios_pago SET predeterminado = FALSE WHERE cliente_id = %s",
-                        (datos.cliente_id,),
-                    )
-
-                medio_id = str(uuid.uuid4())
-                cursor.execute(
-                    """
-                    INSERT INTO medios_pago (id, cliente_id, tipo, alias, ultimos4, predeterminado)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        medio_id,
-                        datos.cliente_id,
-                        datos.tipo,
-                        datos.alias.strip(),
-                        datos.ultimos4,
-                        datos.predeterminado,
-                    ),
-                )
-                conexion.commit()
-
-                return {
-                    "id": medio_id,
-                    "cliente_id": datos.cliente_id,
-                    "tipo": datos.tipo,
-                    "alias": datos.alias.strip(),
-                    "ultimos4": datos.ultimos4,
-                    "predeterminado": datos.predeterminado,
-                }
-            except pymysql.err.IntegrityError as exc:
-                conexion.rollback()
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        "codigo": "M7_MEDIO_PAGO_INVALIDO",
-                        "mensaje": "Los datos del medio de pago no cumplen las reglas de validación del sistema.",
-                        "detalle_db": str(exc),
-                    },
-                ) from exc
-
-
-def listar_medios_pago(cliente_id: str) -> List[Dict[str, Any]]:
-    with get_db() as conexion:
-        with conexion.cursor() as cursor:
-            cursor.execute(
-                "SELECT * FROM medios_pago WHERE cliente_id = %s ORDER BY predeterminado DESC, creado_en DESC",
-                (cliente_id,),
+    try:
+        if datos.predeterminado:
+            db.execute(
+                update(MedioPago)
+                .where(MedioPago.cliente_id == datos.cliente_id)
+                .values(predeterminado=False)
             )
-            return cursor.fetchall()
+
+        nuevo_medio = MedioPago(
+            id=str(uuid.uuid4()),
+            cliente_id=datos.cliente_id,
+            tipo=datos.tipo,
+            alias=datos.alias.strip(),
+            ultimos4=datos.ultimos4,
+            predeterminado=datos.predeterminado,
+        )
+        db.add(nuevo_medio)
+        db.commit()
+        db.refresh(nuevo_medio)
+
+        return {
+            "id": nuevo_medio.id,
+            "cliente_id": nuevo_medio.cliente_id,
+            "tipo": nuevo_medio.tipo,
+            "alias": nuevo_medio.alias,
+            "ultimos4": nuevo_medio.ultimos4,
+            "predeterminado": bool(nuevo_medio.predeterminado),
+        }
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "codigo": "M7_MEDIO_PAGO_INVALIDO",
+                "mensaje": "Los datos del medio de pago no cumplen las reglas de validación del sistema.",
+                "detalle_db": str(exc),
+            },
+        ) from exc
+
+
+def listar_medios_pago(cliente_id: str, db: Session) -> List[Dict[str, Any]]:
+    medios = db.scalars(
+        select(MedioPago)
+        .where(MedioPago.cliente_id == cliente_id)
+        .order_by(MedioPago.predeterminado.desc(), MedioPago.creado_en.desc())
+    ).all()
+    return [m.to_dict() for m in medios]

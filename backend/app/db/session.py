@@ -6,7 +6,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from app.core.config import settings
 
 # pool_pre_ping: si MySQL cerró una conexión vieja, la detecta y abre otra
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True, echo=True)
 SessionLocal = sessionmaker(engine)
 
 

@@ -31,7 +31,7 @@ def health_check(db: Session = Depends(get_db)):
         db.execute(text("SELECT 1"))
     except SQLAlchemyError as exc:
         raise HTTPException(503, "La base de datos no está disponible") from exc
-    return {"status": "ok"}
+    return {"status": "ok", "service": settings.PROJECT_NAME}
 
 
 if __name__ == "__main__":
