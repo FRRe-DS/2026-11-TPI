@@ -8,3 +8,4 @@ class MedioPagoRequest(BaseModel):
     alias: str
     ultimos4: Optional[str] = None
     predeterminado: bool = False
+
