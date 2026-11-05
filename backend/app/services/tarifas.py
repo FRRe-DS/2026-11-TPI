@@ -3,8 +3,12 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.redis import eliminar_cache_patron, guardar_cache, obtener_cache
 from app.models.tarifas import ParametroTarifa
 from app.schemas.tarifas import EstimacionRequest
+
+CLAVE_CACHE_TODOS = "tarifas:parametros:todos"
+PREFIJO_CACHE_PARAMETRO = "tarifas:parametro:"
 
 
 def validar_datos_estimacion(datos: EstimacionRequest) -> List[Dict[str, str]]:
@@ -34,9 +38,27 @@ def validar_datos_estimacion(datos: EstimacionRequest) -> List[Dict[str, str]]:
     return errores
 
 
+def invalidar_cache_tarifas() -> None:
+    """Invalida todas las claves de parámetros de tarifas cacheadas en Redis."""
+    eliminar_cache_patron("tarifas:*")
+
+
 def obtener_todos_los_parametros(db: Session) -> List[Dict[str, Any]]:
+    # 1. Intentar responder desde la caché en memoria (Redis - RNF-11)
+    cacheados = obtener_cache(CLAVE_CACHE_TODOS)
+    if cacheados is not None:
+        return cacheados
+
+    # 2. Si no está en caché (cache miss) o Redis está inactivo, consultar la BD relacional
     parametros = db.scalars(select(ParametroTarifa)).all()
-    return [p.to_dict() for p in parametros]
+    resultado = [p.to_dict() for p in parametros]
+
+    # 3. Guardar en Redis para futuras lecturas ultrarrápidas
+    guardar_cache(CLAVE_CACHE_TODOS, resultado)
+    for p in parametros:
+        guardar_cache(f"{PREFIJO_CACHE_PARAMETRO}{p.tipo_vehiculo.lower()}", p.to_dict())
+
+    return resultado
 
 
 def calcular_estimacion_tarifa(datos: EstimacionRequest, db: Session) -> Dict[str, Any]:
@@ -50,19 +72,30 @@ def calcular_estimacion_tarifa(datos: EstimacionRequest, db: Session) -> Dict[st
             },
         )
 
-    param = db.scalar(
-        select(ParametroTarifa).where(
-            ParametroTarifa.tipo_vehiculo == datos.tipo_vehiculo.lower()
+    tipo = datos.tipo_vehiculo.lower()
+    clave_cache = f"{PREFIJO_CACHE_PARAMETRO}{tipo}"
+
+    # 1. Intentar obtener el parámetro del vehículo desde Redis
+    param_dict = obtener_cache(clave_cache)
+
+    if param_dict is None:
+        # 2. Cache miss: consultar en base de datos
+        param = db.scalar(
+            select(ParametroTarifa).where(
+                ParametroTarifa.tipo_vehiculo == tipo
+            )
         )
-    )
+        if not param:
+            raise HTTPException(status_code=404, detail="M7_SIN_PARAMETROS")
 
-    if not param:
-        raise HTTPException(status_code=404, detail="M7_SIN_PARAMETROS")
+        param_dict = param.to_dict()
+        # 3. Almacenar en Redis
+        guardar_cache(clave_cache, param_dict)
 
-    base = float(param.base)
-    por_km = float(param.por_km)
-    por_min = float(param.por_min)
-    minima = float(param.minima)
+    base = float(param_dict["base"])
+    por_km = float(param_dict["por_km"])
+    por_min = float(param_dict["por_min"])
+    minima = float(param_dict["minima"])
 
     costo_distancia = round(por_km * datos.distancia_km, 2)
     costo_tiempo = round(por_min * datos.tiempo_min, 2)
@@ -70,7 +103,7 @@ def calcular_estimacion_tarifa(datos: EstimacionRequest, db: Session) -> Dict[st
     total = round(max(subtotal, minima), 2)
 
     return {
-        "tipo_vehiculo": datos.tipo_vehiculo.lower(),
+        "tipo_vehiculo": tipo,
         "base": base,
         "distancia": costo_distancia,
         "tiempo": costo_tiempo,

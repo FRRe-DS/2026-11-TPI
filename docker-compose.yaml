@@ -35,7 +35,22 @@ services:
       timeout: 5s
       retries: 10
 
-  # 3. Aplicación Backend (FastAPI)
+  # 3. Servidor de Caché en Memoria (Redis - RNF-11)
+  redis:
+    image: redis:7.2-alpine
+    container_name: m7_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # 4. Aplicación Backend (FastAPI)
   api:
     build:
       context: .
@@ -51,6 +66,9 @@ services:
       MYSQL_USER: ${MYSQL_USER:-m7}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-admin}
       DATABASE_URL: mysql+pymysql://${MYSQL_USER:-m7}:${MYSQL_PASSWORD:-admin}@db:3306/${MYSQL_DATABASE:-m7}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
       KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/ds-2026-realm
       AUTH_DISABLED: ${AUTH_DISABLED:-true}
       M4_UBICACION_URL: ${M4_UBICACION_URL:-}
@@ -59,8 +77,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       keycloak:
         condition: service_started
 
 volumes:
   db_data:
+  redis_data:

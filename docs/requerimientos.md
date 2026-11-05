@@ -13,6 +13,14 @@
 
 ---
 
+## 🛡️ Requerimientos No Funcionales (RNF)
+
+| ID | Requerimiento | Estado | Descripción y Solución Técnica |
+| :--- | :--- | :---: | :--- |
+| **RNF-11** | **Rendimiento y Caché en Memoria** | ✅ Implementado | Integración de **Redis** como servidor de caché en memoria para los parámetros de tarificación y cálculos frecuentes, con tiempo de expiración (TTL) e invalidación, y fallback transparente a MySQL si Redis no estuviera disponible. |
+
+---
+
 ### Integración con otros módulos
 
 - **M2 (Clientes):** Provee el `cliente_id` para medios de pago y cobros.

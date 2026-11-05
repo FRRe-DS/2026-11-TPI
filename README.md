@@ -5,6 +5,7 @@
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![Keycloak](https://img.shields.io/badge/Keycloak-24.0-0097CE?style=for-the-badge&logo=Keycloak&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7.2-DC382D?style=for-the-badge&logo=redis&logoColor=white)
 
 Bienvenido al repositorio del **Grupo 11**. Somos los encargados de desarrollar el Módulo 7 para el Sistema Integrado de Viajes y Transporte (TPI 2026).
 
@@ -14,7 +15,7 @@ Bienvenido al repositorio del **Grupo 11**. Somos los encargados de desarrollar 
 
 Nuestro microservicio es el corazón financiero de la plataforma:
 
-*   **🪙 Tarifas:** Calculamos el precio estimado y final de los viajes basándonos en distancia, tiempo, tipo de vehículo y parámetros de negocio configurables.
+*   **🪙 Tarifas:** Calculamos el precio estimado y final de los viajes basándonos en distancia, tiempo, tipo de vehículo y parámetros de negocio configurables, acelerado mediante caché en memoria con **Redis** (RNF-11).
 *   **💳 Pagos:** Gestionamos métodos de pago, autorizaciones, capturas, cargos de cancelación y reintegros con garantía de idempotencia.
 *   **💰 Liquidaciones:** Administramos los saldos y transferencias correspondientes a los conductores tras cada ciclo de facturación.
 
@@ -46,11 +47,11 @@ Copia la plantilla y configura tus credenciales locales:
 cp .env.example .env
 ```
 
-### 2. Levantar la Infraestructura Base (Keycloak + MySQL)
+### 2. Levantar la Infraestructura Base (Keycloak + MySQL + Redis)
 ```bash
 docker compose up -d
 ```
-> **Nota:** Keycloak se inicializará automáticamente con el Realm del proyecto en el puerto `8080`, y MySQL se levantará en el puerto `3306` ejecutando los scripts de inicialización de `init-db/`.
+> **Nota:** Keycloak se inicializará automáticamente con el Realm del proyecto en el puerto `8080`, MySQL se levantará en el puerto `3306` ejecutando los scripts de `init-db/`, y Redis como caché en memoria en el puerto `6379`.
 
 ### 3. Entorno Virtual de Python y Dependencias
 
