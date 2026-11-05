@@ -28,6 +28,9 @@ class Settings:
         "KEYCLOAK_ISSUER_URI",
         "http://localhost:8080/realms/ds-2026-realm",
     )
+    PASARELA_WEBHOOK_SECRET: str = os.getenv("PASARELA_WEBHOOK_SECRET", "")
+
+    # URLs Externas
     M4_UBICACION_URL: str = os.getenv("M4_UBICACION_URL", "")
     M6_VIAJES_URL: str = os.getenv("M6_VIAJES_URL", "")
     M9_RESERVAS_URL: str = os.getenv("M9_RESERVAS_URL", "")
@@ -40,13 +43,6 @@ class Settings:
     RABBITMQ_PASSWORD: str = os.getenv("RABBITMQ_PASSWORD", "guest")
     RABBITMQ_EXCHANGE: str = os.getenv("RABBITMQ_EXCHANGE", "transporte")
     RABBITMQ_VHOST: str = os.getenv("RABBITMQ_VHOST", "/")
-
-    # RabbitMQ
-    RABBITMQ_HOST: str = os.getenv("RABBITMQ_HOST", "localhost")
-    RABBITMQ_PORT: int = int(os.getenv("RABBITMQ_PORT", "5672"))
-    RABBITMQ_USER: str = os.getenv("RABBITMQ_USER", "guest")
-    RABBITMQ_PASSWORD: str = os.getenv("RABBITMQ_PASSWORD", "guest")
-    RABBITMQ_EXCHANGE: str = os.getenv("RABBITMQ_EXCHANGE", "viajes")
 
 
 settings = Settings()
