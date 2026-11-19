@@ -1,0 +1,36 @@
+{
+  "name": "demo-hot-sale",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Demo de resiliencia y control de carga: Circuit Breaker, timeout, reintentos, bulkhead, rate limiting y backpressure",
+  "scripts": {
+    "proveedor": "tsx src/proveedor-envios.ts",
+    "tienda": "tsx src/servicio-tienda.ts",
+    "tienda:sin-proteccion": "cross-env PROTEGIDO=false tsx src/servicio-tienda.ts",
+    "modo:normal": "tsx scripts/modo.ts normal",
+    "modo:lento": "tsx scripts/modo.ts lento",
+    "modo:falla": "tsx scripts/modo.ts falla",
+    "modo:intermitente": "tsx scripts/modo.ts intermitente",
+    "cascada": "tsx scripts/cascada.ts",
+    "cotizar": "tsx scripts/cotizar.ts",
+    "metricas": "tsx scripts/metricas.ts",
+    "rate-limit": "tsx scripts/rate-limit.ts",
+    "facturas": "tsx scripts/productor-pedidos.ts",
+    "carga": "autocannon -c 200 -d 10 http://localhost:3000/envios/cotizar?cp=3400",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "cockatiel": "^3.2.1",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.0.0",
+    "autocannon": "^8.0.0",
+    "cross-env": "^10.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
