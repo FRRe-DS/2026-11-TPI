@@ -1,0 +1,50 @@
+name: CI M7
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements.txt
+
+      - name: Compilar y ejecutar pruebas
+        run: |
+          python -m compileall -q backend
+          python -m pytest -q
+
+      - name: Construir imagen
+        run: docker build -f backend/Dockerfile -t m7-grupo11 .
+
+      - name: Entrar a Docker Hub
+        if: github.event_name == 'push' && github.repository == 'FRRe-DS/2026-11-TPI'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Publicar imagen
+        if: github.event_name == 'push' && github.repository == 'FRRe-DS/2026-11-TPI'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          image="${DOCKERHUB_USERNAME}/m7-grupo11:${GITHUB_SHA}"
+          docker tag m7-grupo11 "$image"
+          docker push "$image"
